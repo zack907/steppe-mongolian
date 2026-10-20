@@ -1003,7 +1003,8 @@ async function callClaude(){
     body:JSON.stringify({model:chatModel(),max_tokens:400,output_config:{effort:'low'},
       system:chatSystem(),messages:chat.msgs.slice(-16).map(m=>({role:m.role,content:m.raw}))})});
   if(!r.ok){
-    if(r.status===401)throw new Error('API key rejected — tap the gear and check it (should start with sk-ant-).');
+    if(r.status===401)throw new Error('API key rejected (401). Tap the gear: the key preview there must match the one on console.anthropic.com’s API-keys page. If it doesn’t, re-copy the full key — or create a fresh one and paste that.');
+    if(r.status===403)throw new Error('This key doesn’t have permission (403) — create a key in the Default workspace and try that one.');
     if(r.status===429)throw new Error('Rate limited — wait a few seconds and try again.');
     if(r.status===400){const j=await r.json().catch(()=>null);
       throw new Error('Request error: '+(j&&j.error?j.error.message.slice(0,140):r.status));}
@@ -1028,7 +1029,9 @@ function renderChat(){
         <li>Add a few dollars of credit under <b>Billing</b></li>
         <li>Open <b>API Keys</b> → Create key → copy it</li>
       </ol>`}
-      <input id="keyIn" type="password" placeholder="${has?'Key saved ✓ — paste a new one to replace':'Paste your key (sk-ant-…)'}" autocomplete="off">
+      ${has?`<div class="fine" style="margin:0 0 8px">Current key on this device: <b>${apiKey().slice(0,14)}…${apiKey().slice(-2)}</b> — compare with the API-keys page at console.anthropic.com.</div>`:''}
+      <input id="keyIn" type="password" placeholder="${has?'Key saved ✓ — paste a new one to replace':'Paste your key (sk-ant-…)'}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div id="keyWarn" class="chat-err" hidden style="margin:0 0 10px"></div>
       <div class="modelrow"><input type="checkbox" id="smartCk" ${chatModel()!=='claude-haiku-5-5'?'checked':''}>
         <label for="smartCk">Smarter partner (Opus — better Mongolian, ~40× the cost per chat)</label></div>
       <button class="btn btn-primary" id="keySave">${has?'Save settings':'Save & start chatting'}</button>
@@ -1036,12 +1039,20 @@ function renderChat(){
       <div class="fine">Your key is stored only in this browser on this device and sent only to api.anthropic.com. Manage or revoke it anytime at console.anthropic.com.</div>
     </div>`;
     $('keySave').onclick=()=>{
-      const v=$('keyIn').value.trim();
+      // strip ALL whitespace and invisible characters that sneak in when pasting across devices
+      const v=$('keyIn').value.replace(/[\s​-‍﻿ ]/g,'');
+      if(v&&!/^sk-ant-[A-Za-z0-9_-]{24,}$/.test(v)){
+        const w=$('keyWarn');w.hidden=false;
+        w.textContent=v.length<30
+          ?'That looks too short to be a full key — make sure you copied the whole thing (it’s ~100 characters, starting sk-ant-).'
+          :'That doesn’t look like a Claude API key — it should start with sk-ant- and contain only letters, digits, - and _.';
+        return;
+      }
       try{
         if(v)localStorage.setItem('steppe_api_key',v);
         localStorage.setItem('steppe_chat_model',$('smartCk').checked?'claude-opus-5-5':'claude-haiku-5-5');
       }catch(e){}
-      chat.showSetup=false;renderChat();
+      chat.msgs=[];chat.showSetup=false;renderChat();
     };
     const kc=$('keyClear');if(kc)kc.onclick=()=>{try{localStorage.removeItem('steppe_api_key');}catch(e){};chat.msgs=[];chat.showSetup=false;renderChat();};
     return;
