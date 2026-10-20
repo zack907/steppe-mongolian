@@ -219,6 +219,43 @@ button{font-family:var(--body);font-size:16px;cursor:pointer;border:none;backgro
 .note{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px 14px;
   font-size:13.5px;color:var(--sub);margin:6px 0 2px}
 .note b{color:var(--ink)}
+
+/* AI chat */
+.chat-top{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.chat-top select{flex:1;min-width:0;padding:10px 12px;border-radius:12px;border:2px solid var(--line);
+  background:var(--card);color:var(--ink);font-family:var(--body);font-weight:600;font-size:14px}
+.gearbtn,.newbtn{width:42px;height:42px;border-radius:12px;background:var(--card);border:2px solid var(--line);
+  color:var(--sub);display:flex;align-items:center;justify-content:center;flex:none}
+.chatlog{display:flex;flex-direction:column;gap:10px;min-height:120px;padding-bottom:8px}
+.bub .note-chip{display:inline-block;background:var(--gold-soft);color:var(--gold-deep);border-radius:8px;
+  padding:3px 8px;font-size:12px;font-weight:700;margin-bottom:5px}
+.bub .showen-hint{font-size:11px;color:var(--sub);margin-top:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.bub.ai .eline{display:none}
+.bub.ai.showen .eline{display:block}
+.typing{display:inline-flex;gap:4px;padding:6px 2px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--sub);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.typing i{animation:none}}
+.chat-input{display:flex;gap:8px;margin-top:12px}
+.chat-input input{flex:1;padding:12px 14px;border-radius:14px;border:2px solid var(--line);
+  background:var(--card);color:var(--ink);font-family:var(--body);font-size:16px;min-width:0}
+.chat-input input:focus{outline:none;border-color:var(--sky)}
+.sendbtn{width:46px;height:46px;border-radius:14px;background:linear-gradient(180deg,var(--sky),var(--sky-deep));
+  color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 3px 0 var(--sky-deep)}
+.chatmic{width:46px;height:46px;border-radius:14px;background:var(--card);border:2px solid var(--line);
+  color:var(--sub);display:flex;align-items:center;justify-content:center;flex:none}
+.chatmic.rec{background:var(--red);border-color:var(--red);color:#fff;animation:pulse 1s infinite}
+.chat-err{background:var(--red-soft);color:var(--red);border-radius:12px;padding:10px 14px;
+  font-size:13.5px;font-weight:600;margin-top:10px}
+.setupcard{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:22px}
+.setupcard h3{margin:0 0 10px;font-family:var(--display);font-size:17px;color:var(--sky)}
+.setupcard ol{margin:8px 0 14px;padding-left:20px;color:var(--sub);font-size:14px}
+.setupcard ol b{color:var(--ink)}
+.setupcard input{width:100%;padding:12px 14px;border-radius:12px;border:2px solid var(--line);
+  background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;margin-bottom:10px}
+.setupcard .fine{font-size:12px;color:var(--sub);margin-top:10px}
+.modelrow{display:flex;align-items:center;gap:8px;margin:8px 0 12px;font-size:14px;font-weight:600;color:var(--sub)}
 </style>
 
 <div class="app">
@@ -248,6 +285,7 @@ button{font-family:var(--body);font-size:16px;cursor:pointer;border:none;backgro
     <div class="tabs">
       <button class="tab on" data-pane="learnPane">Learn</button>
       <button class="tab" data-pane="reviewPane">Review</button>
+      <button class="tab" data-pane="chatPane">Chat</button>
       <button class="tab" data-pane="wordsPane">Words</button>
       <button class="tab" data-pane="tipsPane">Tips</button>
     </div>
@@ -267,6 +305,7 @@ button{font-family:var(--body);font-size:16px;cursor:pointer;border:none;backgro
       <div class="wgroup">Needs work</div>
       <div id="weakList"></div>
     </div>
+    <div id="chatPane" hidden></div>
     <div id="wordsPane" class="wordlist" hidden></div>
     <div id="tipsPane" class="wordlist" hidden></div>
   </div>
@@ -385,10 +424,11 @@ function renderHome(){
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
-  ['learnPane','reviewPane','wordsPane','tipsPane'].forEach(p=>$(p).hidden=p!==t.dataset.pane);
+  ['learnPane','reviewPane','chatPane','wordsPane','tipsPane'].forEach(p=>$(p).hidden=p!==t.dataset.pane);
   if(t.dataset.pane==='wordsPane')renderWords();
   if(t.dataset.pane==='tipsPane')renderTips();
   if(t.dataset.pane==='reviewPane')renderReview();
+  if(t.dataset.pane==='chatPane')renderChat();
 });
 function wordRow(w,obj){
   const r=document.createElement('div');r.className='wrow';
@@ -924,6 +964,178 @@ function setupMic(item){
     $('saNo').onclick=()=>{selfA.hidden=true;heard.textContent='';hint.textContent='Listen again, then tap the mic and retry';};
   }
   btn.onclick=startRec;
+}
+
+/* ---------------- AI conversation partner ---------------- */
+const SCEN=[
+ {id:'free',name:'Free chat',partner:'Сараа',desc:'An open, friendly chat about anything.'},
+ {id:'cafe',name:'At the café',partner:'Зөөгч (waiter)',desc:'The learner is ordering food and drinks at a small café in Ulaanbaatar.'},
+ {id:'market',name:'At the market',partner:'Худалдагч (seller)',desc:'The learner is shopping and bargaining at the Narantuul market.'},
+ {id:'taxi',name:'In a taxi',partner:'Жолооч (driver)',desc:'The learner takes a taxi across the city and makes small talk.'},
+ {id:'meet',name:'Meeting someone new',partner:'Болд',desc:'The learner meets Bold for the first time at a gathering.'},
+ {id:'ger',name:'Visiting a ger',partner:'Малчин (herder)',desc:'A herder family welcomes the learner into their ger on the steppe.'}];
+let chat={scen:SCEN[0],msgs:[],busy:false,showSetup:false};
+function apiKey(){try{return localStorage.getItem('steppe_api_key')||'';}catch(e){return '';}}
+function chatModel(){try{return localStorage.getItem('steppe_chat_model')||'claude-haiku-5-5';}catch(e){return 'claude-haiku-5-5';}}
+function knownWords(){
+  const ws=[];
+  COURSE.forEach(u=>{if(S.done[u.id])poolOf(u).forEach(it=>{if(it.mn&&!ws.includes(it.mn))ws.push(it.mn);});});
+  if(ws.length<24)SECTIONS[0].units.forEach(u=>{if(u.type==='vocab')u.items.forEach(it=>{if(!ws.includes(it.mn))ws.push(it.mn);});});
+  return ws.slice(0,420);
+}
+function chatSystem(){
+  const ws=knownWords();
+  const lvl=ws.length<60?'an absolute beginner':ws.length<200?'a beginner with some basics':'a confident beginner approaching intermediate';
+  return `You are ${chat.scen.partner}, a warm, friendly Mongolian speaker, role-playing with ${lvl} who is learning Mongolian (Khalkha, Cyrillic script). Scenario: ${chat.scen.name}. ${chat.scen.desc}
+The learner's known vocabulary (prefer these words): ${ws.join(', ')}.
+Rules:
+- Reply with 1-2 SHORT, simple Mongolian sentences. Mostly use words they know; you may introduce at most one new word per reply.
+- Stay in character. Be encouraging. Usually end with a small question to keep them talking.
+- The learner may write in Mongolian, romanized Mongolian, or English; always answer in Mongolian.
+- If their message is exactly "[start]", open the conversation naturally for the scenario.
+- "note": if their last message had a Mongolian mistake, ONE short gentle correction in English; otherwise "".
+Respond with ONLY strict JSON, no markdown fences: {"mn":"your reply in Cyrillic","roman":"its romanization","en":"English translation","note":""}`;
+}
+async function callClaude(){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{
+    'content-type':'application/json','x-api-key':apiKey(),
+    'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:chatModel(),max_tokens:400,output_config:{effort:'low'},
+      system:chatSystem(),messages:chat.msgs.slice(-16).map(m=>({role:m.role,content:m.raw}))})});
+  if(!r.ok){
+    if(r.status===401)throw new Error('API key rejected — tap the gear and check it (should start with sk-ant-).');
+    if(r.status===429)throw new Error('Rate limited — wait a few seconds and try again.');
+    if(r.status===400){const j=await r.json().catch(()=>null);
+      throw new Error('Request error: '+(j&&j.error?j.error.message.slice(0,140):r.status));}
+    throw new Error('API error '+r.status+' — try again.');
+  }
+  const j=await r.json();
+  return (j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+}
+function parseAI(txt){
+  try{const m=txt.match(/\{[\s\S]*\}/);if(m){const o=JSON.parse(m[0]);if(o.mn)return o;}}catch(e){}
+  return {mn:(txt||'').trim(),roman:'',en:'',note:''};
+}
+function renderChat(){
+  const P=$('chatPane');
+  if(!apiKey()||chat.showSetup){
+    const has=!!apiKey();
+    P.innerHTML=`<div class="setupcard">
+      <h3>${has?'Chat settings':'Talk to a real AI in Mongolian'}</h3>
+      ${has?'':`<p style="margin:0 0 8px;font-size:14px;color:var(--sub)">Chat freely with an AI partner who stays at your level, uses words you've learned, and gently corrects your mistakes. It needs your own Claude API key (pay-as-you-go — a chat session costs about a cent or two):</p>
+      <ol>
+        <li>Go to <b>console.anthropic.com</b> and sign in / sign up</li>
+        <li>Add a few dollars of credit under <b>Billing</b></li>
+        <li>Open <b>API Keys</b> → Create key → copy it</li>
+      </ol>`}
+      <input id="keyIn" type="password" placeholder="${has?'Key saved ✓ — paste a new one to replace':'Paste your key (sk-ant-…)'}" autocomplete="off">
+      <div class="modelrow"><input type="checkbox" id="smartCk" ${chatModel()!=='claude-haiku-5-5'?'checked':''}>
+        <label for="smartCk">Smarter partner (Opus — better Mongolian, ~40× the cost per chat)</label></div>
+      <button class="btn btn-primary" id="keySave">${has?'Save settings':'Save & start chatting'}</button>
+      ${has?'<button class="bar-skip" id="keyClear">Remove key from this device</button>':''}
+      <div class="fine">Your key is stored only in this browser on this device and sent only to api.anthropic.com. Manage or revoke it anytime at console.anthropic.com.</div>
+    </div>`;
+    $('keySave').onclick=()=>{
+      const v=$('keyIn').value.trim();
+      try{
+        if(v)localStorage.setItem('steppe_api_key',v);
+        localStorage.setItem('steppe_chat_model',$('smartCk').checked?'claude-opus-5-5':'claude-haiku-5-5');
+      }catch(e){}
+      chat.showSetup=false;renderChat();
+    };
+    const kc=$('keyClear');if(kc)kc.onclick=()=>{try{localStorage.removeItem('steppe_api_key');}catch(e){};chat.msgs=[];chat.showSetup=false;renderChat();};
+    return;
+  }
+  P.innerHTML=`<div class="chat-top">
+      <select id="scenSel">${SCEN.map((s,i)=>`<option value="${i}" ${s===chat.scen?'selected':''}>${s.name} · ${s.partner}</option>`).join('')}</select>
+      <button class="newbtn" id="newChat" title="New chat" aria-label="New chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+      <button class="gearbtn" id="gear" title="Settings" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 -1)"/></svg></button>
+    </div>
+    <div class="note" style="margin-bottom:12px">You're chatting with <b>${chat.scen.partner}</b>. Reply in Mongolian (or romanized — they'll understand). Tap their bubble to show the English.</div>
+    <div class="chatlog" id="chatlog"></div>
+    <div id="chatErr"></div>
+    <div class="chat-input">
+      <input id="chatIn" placeholder="Бичээрэй… (type here)" autocomplete="off">
+      ${(window.SpeechRecognition||window.webkitSpeechRecognition)?`<button class="chatmic" id="chatMic" aria-label="Speak"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm6-3a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.9V22h2v-2.1A8 8 0 0 0 20 12h-2z"/></svg></button>`:''}
+      <button class="sendbtn" id="chatSend" aria-label="Send"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2v6z"/></svg></button>
+    </div>`;
+  $('scenSel').onchange=e=>{chat.scen=SCEN[+e.target.value];chat.msgs=[];renderChat();startChat();};
+  $('newChat').onclick=()=>{chat.msgs=[];renderChat();startChat();};
+  $('gear').onclick=()=>{chat.showSetup=true;renderChat();};
+  $('chatSend').onclick=sendChat;
+  $('chatIn').onkeydown=e=>{if(e.key==='Enter')sendChat();};
+  const mic=$('chatMic');
+  if(mic)mic.onclick=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    try{
+      const r=new SR();r.lang='mn-MN';r.interimResults=false;
+      mic.classList.add('rec');
+      r.onresult=ev=>{$('chatIn').value=ev.results[0][0].transcript;};
+      r.onend=()=>mic.classList.remove('rec');
+      r.onerror=()=>{mic.classList.remove('rec');};
+      r.start();
+    }catch(e){mic.classList.remove('rec');}
+  };
+  drawChat();
+  if(!chat.msgs.length)startChat();
+}
+function drawChat(){
+  const log=$('chatlog');if(!log)return;
+  log.innerHTML='';
+  chat.msgs.forEach(m=>{
+    if(m.role==='user'){
+      if(m.raw==='[start]')return;
+      const b=document.createElement('div');b.className='bub me';
+      b.innerHTML=`<div class="who">You</div><div class="mnline"></div>`;
+      b.querySelector('.mnline').textContent=m.raw;
+      log.appendChild(b);
+    }else{
+      const p=m.parsed;
+      const b=document.createElement('div');b.className='bub ai';
+      b.innerHTML=`${p.note?`<div class="note-chip"></div>`:''}
+        <div class="who">${chat.scen.partner}</div>
+        <div class="mnline"></div><div class="rline"></div>
+        <div class="eline"></div><div class="showen-hint">tap for English</div>`;
+      if(p.note)b.querySelector('.note-chip').textContent='✎ '+p.note;
+      b.querySelector('.mnline').textContent=p.mn;
+      b.querySelector('.rline').textContent=p.roman||'';
+      b.querySelector('.eline').textContent=p.en||'';
+      b.onclick=()=>b.classList.toggle('showen');
+      log.appendChild(b);
+    }
+  });
+  if(chat.busy){
+    const t=document.createElement('div');t.className='bub ai';
+    t.innerHTML=`<div class="who">${chat.scen.partner}</div><span class="typing"><i></i><i></i><i></i></span>`;
+    log.appendChild(t);
+  }
+  log.lastElementChild&&log.lastElementChild.scrollIntoView({block:'nearest'});
+}
+async function startChat(){
+  chat.msgs=[{role:'user',raw:'[start]'}];
+  await askAI();
+}
+async function sendChat(){
+  const inp=$('chatIn');if(!inp)return;
+  const v=inp.value.trim();
+  if(!v||chat.busy)return;
+  inp.value='';
+  chat.msgs.push({role:'user',raw:v});
+  await askAI();
+}
+async function askAI(){
+  chat.busy=true;$('chatErr')&&($('chatErr').innerHTML='');drawChat();
+  try{
+    const txt=await callClaude();
+    chat.msgs.push({role:'assistant',raw:txt,parsed:parseAI(txt)});
+  }catch(e){
+    const ce=$('chatErr');
+    if(ce){ce.innerHTML='<div class="chat-err"></div>';ce.firstChild.textContent=e.message;}
+    if(chat.msgs.length&&chat.msgs[chat.msgs.length-1].role==='user'&&chat.msgs[chat.msgs.length-1].raw!=='[start]'){
+      const last=chat.msgs.pop();const inp=$('chatIn');if(inp&&!inp.value)inp.value=last.raw;
+    }
+  }
+  chat.busy=false;drawChat();
 }
 
 /* ---------------- boot ---------------- */
